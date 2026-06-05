@@ -1,0 +1,17 @@
+[Unit]
+Description=JLU DrCOM Auto Authentication Service
+After=NetworkManager-wait-online.service network-online.target
+Wants=NetworkManager-wait-online.service network-online.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/jlu-drcom-auth.env
+WorkingDirectory=/opt/jlu-drcom-auth
+ExecStart=/usr/bin/python3 /opt/jlu-drcom-auth/drcom_auth.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
