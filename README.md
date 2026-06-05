@@ -1,6 +1,27 @@
 # JLU DrCOM 校园网自动认证
 
-这是一个用于 Linux 的 DrCOM UDP 校园网自动认证服务。程序会等待指定 WiFi 连接，向 DrCOM 认证服务器登录，并通过周期性心跳保持在线。
+这是一个面向 Linux 常驻设备的 DrCOM UDP 校园网自动认证服务。程序会等待指定 WiFi 连接，向 DrCOM 认证服务器登录，并通过周期性心跳保持在线，适合放在宿舍、实验室或小型边缘设备上自动维持校园网连接。
+
+本项目不包含任何真实账号、密码、MAC 地址或校园网环境信息。所有敏感配置都通过环境变量或本机私有配置文件提供。
+
+## 适用平台
+
+推荐运行环境：
+
+- ARM64 Linux 设备
+- Python 3
+- NetworkManager 和 `nmcli`
+- 已保存目标 WiFi 的 NetworkManager 连接配置
+
+已适配和推荐的设备类型：
+
+- RK3588 / RK3588S 开发板或小主机
+- RK3566 / RK3568 设备
+- Raspberry Pi 4 / 5
+- Orange Pi、Radxa、FriendlyELEC 等 ARM64 Linux 单板机
+- 其他长期在线的 ARM64 Linux 设备
+
+本项目使用纯 Python 和系统命令实现，没有依赖特定 CPU 指令。理论上 x86_64 Linux 也可以运行，但主要面向 ARM64 Linux 常驻设备维护。
 
 ## 功能
 
@@ -9,14 +30,7 @@
 - 登录成功后持续发送心跳包维持在线。
 - WiFi 未连接、服务器不可达、心跳异常时自动重试。
 - 支持通过 systemd 后台运行和开机自启。
-- 账号、密码、MAC 等敏感信息通过环境变量提供，不写入仓库。
-
-## 运行要求
-
-- Linux
-- Python 3
-- NetworkManager 和 `nmcli`
-- 目标 WiFi 已经在系统中保存为 NetworkManager 连接配置
+- 账号、密码、MAC 等敏感信息不写入源码仓库。
 
 ## 配置
 
@@ -64,6 +78,12 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now jlu-drcom-auth.service
 ```
 
+查看服务状态：
+
+```sh
+systemctl status jlu-drcom-auth.service
+```
+
 查看服务日志：
 
 ```sh
@@ -72,9 +92,9 @@ journalctl -u jlu-drcom-auth.service -f
 
 脚本默认也会在运行目录写入本地日志文件：`drcom_auth.log`。
 
-## 安全说明
+## 公开仓库前的安全检查
 
-不要把真实账号、密码、MAC 地址、IP 缓存或日志提交到仓库。本项目已经通过 `.gitignore` 忽略以下内容：
+请不要把真实账号、密码、MAC 地址、IP 缓存或日志提交到仓库。本项目已经通过 `.gitignore` 忽略以下内容：
 
 - `.env`
 - `*.env`
@@ -82,4 +102,18 @@ journalctl -u jlu-drcom-auth.service -f
 - `*.log`
 - Python 缓存文件
 
-如果你要公开仓库，请先确认提交历史中没有出现过真实凭据。
+推荐在公开仓库前执行：
+
+```sh
+git status --short --ignored
+git grep -n -I "你的账号或密码关键字" HEAD
+git log --all -p -G "你的账号或密码关键字"
+```
+
+如果历史提交中曾经出现真实凭据，请不要直接公开仓库，应该先清理历史或重新创建干净仓库。
+
+## 注意事项
+
+- 不同学校或不同版本 DrCOM 的 UDP 协议细节可能不完全一致，需要根据实际网络环境调整。
+- 设备需要能够访问 DrCOM 认证服务器。
+- WiFi 名称、网卡名、账号、密码、MAC 地址都应该只保存在本机私有配置文件中。
