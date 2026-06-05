@@ -1,8 +1,8 @@
 # JLU DrCOM 校园网自动认证
 
-这是一个面向 Linux 常驻设备的 DrCOM UDP 校园网自动认证服务。程序会等待指定 WiFi 连接，向 DrCOM 认证服务器登录，并通过周期性心跳保持在线，适合放在宿舍、实验室或小型边缘设备上自动维持校园网连接。
+这是一个面向吉林大学校园网的 DrCOM UDP 自动认证服务。程序会等待指定 WiFi 连接，向 JLU 校园网 DrCOM 认证服务器登录，并通过周期性心跳保持在线，适合放在宿舍、实验室或小型边缘设备上自动维持校园网连接。
 
-本项目不包含任何真实账号、密码、MAC 地址或校园网环境信息。所有敏感配置都通过环境变量或本机私有配置文件提供。
+本项目不包含任何真实账号、密码或 MAC 地址。所有敏感配置都通过环境变量或本机私有配置文件提供。
 
 ## 适用平台
 
@@ -68,6 +68,8 @@ python3 drcom_auth.py
 
 ## systemd 部署
 
+`systemd` 是 Linux 上常用的后台服务管理工具。把认证脚本注册成 systemd 服务后，设备开机时会自动启动认证程序；如果程序异常退出，systemd 也会按服务文件里的规则自动重启它。
+
 安装脚本和服务文件：
 
 ```sh
@@ -78,11 +80,21 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now jlu-drcom-auth.service
 ```
 
+这些命令的作用：
+
+- `sudo mkdir -p /opt/jlu-drcom-auth`：创建程序安装目录。
+- `sudo cp drcom_auth.py /opt/jlu-drcom-auth/`：把认证脚本复制到固定安装目录。
+- `sudo cp jlu-drcom-auth.service /etc/systemd/system/jlu-drcom-auth.service`：把服务配置文件安装到 systemd 的系统服务目录。
+- `sudo systemctl daemon-reload`：让 systemd 重新读取刚安装的服务文件。
+- `sudo systemctl enable --now jlu-drcom-auth.service`：设置开机自启，并立刻启动服务。
+
 查看服务状态：
 
 ```sh
 systemctl status jlu-drcom-auth.service
 ```
+
+这个命令可以看到服务是否正在运行、最近是否报错、进程号以及最近几行日志。
 
 查看服务日志：
 
@@ -90,30 +102,10 @@ systemctl status jlu-drcom-auth.service
 journalctl -u jlu-drcom-auth.service -f
 ```
 
-脚本默认也会在运行目录写入本地日志文件：`drcom_auth.log`。
-
-## 公开仓库前的安全检查
-
-请不要把真实账号、密码、MAC 地址、IP 缓存或日志提交到仓库。本项目已经通过 `.gitignore` 忽略以下内容：
-
-- `.env`
-- `*.env`
-- `.drcom_ip_cache`
-- `*.log`
-- Python 缓存文件
-
-推荐在公开仓库前执行：
-
-```sh
-git status --short --ignored
-git grep -n -I "你的账号或密码关键字" HEAD
-git log --all -p -G "你的账号或密码关键字"
-```
-
-如果历史提交中曾经出现真实凭据，请不要直接公开仓库，应该先清理历史或重新创建干净仓库。
+这个命令会持续跟随服务日志，适合排查 WiFi 连接、认证失败或心跳异常等问题。脚本默认也会在运行目录写入本地日志文件：`drcom_auth.log`。
 
 ## 注意事项
 
-- 不同学校或不同版本 DrCOM 的 UDP 协议细节可能不完全一致，需要根据实际网络环境调整。
-- 设备需要能够访问 DrCOM 认证服务器。
+- 本项目面向吉林大学校园网 DrCOM UDP 认证环境编写。
+- 设备需要能够连接吉林大学校园网 WiFi，并访问 JLU DrCOM 认证服务器。
 - WiFi 名称、网卡名、账号、密码、MAC 地址都应该只保存在本机私有配置文件中。
