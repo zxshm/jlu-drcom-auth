@@ -101,18 +101,21 @@ http://ip.jlu.edu.cn
 
 ## 配置
 
-复制 `.env.example` 到本机私有配置文件，例如 `/etc/jlu-drcom-auth.env`，然后填写真实信息：
+复制 `.env.example` 到 `.env`（本机私有配置文件），然后填写真实信息：
 
 ```sh
-sudo install -m 600 .env.example /etc/jlu-drcom-auth.env
-sudo editor /etc/jlu-drcom-auth.env
+cp .env.example .env
+chmod 600 .env
+editor .env
 ```
+
+脚本启动时会自动加载同目录下的 `.env` 文件，无需手动 `source`。
 
 必填变量：
 
 - `DRCOM_WIFI_SSID`：校园网 WiFi 名称
 - `DRCOM_WIFI_IFACE`：无线网卡名称，例如 `wlan0`
-- `DRCOM_SERVER`：DrCOM 认证服务器地址
+- `DRCOM_SERVER`：DrCOM 认证服务器地址（内网地址，如 `10.100.61.3`，**不是公网 IP**）
 - `DRCOM_USERNAME`：认证账号
 - `DRCOM_PASSWORD`：认证密码
 - `DRCOM_REGISTERED_MAC`：绑定或注册的 MAC 地址
@@ -124,14 +127,26 @@ sudo editor /etc/jlu-drcom-auth.env
 00:11:22:33:44:55
 ```
 
-本地手动运行时，先加载私有配置：
+可选变量：
+
+- `DRCOM_HOST_NAME`：主机名，默认 `Linux`
+- `DRCOM_HOST_OS`：操作系统，默认 `Linux`
+- `DRCOM_PRIMARY_DNS`：主 DNS，默认 `10.10.10.10`
+- `DRCOM_DHCP_SERVER`：DHCP 服务器，默认 `0.0.0.0`
+- `DRCOM_CHECK_INTERVAL`：主循环检查间隔（秒），默认 `30`
+- `DRCOM_WIFI_RETRY_INTERVAL`：WiFi 重试间隔（秒），默认 `5`
+- `DRCOM_MAX_WIFI_RETRIES`：WiFi 最大重试次数，默认 `20`
+- `DRCOM_KEEP_ALIVE_INTERVAL`：心跳间隔（秒），默认 `10`
+- `DRCOM_SOCKET_TIMEOUT`：Socket 超时（秒），默认 `10`
+- `DRCOM_MAX_UDP_RETRIES`：UDP 单次发送最大重试次数，默认 `3`
+
+本地手动运行：
 
 ```sh
-set -a
-. /etc/jlu-drcom-auth.env
-set +a
 python3 drcom_auth.py
 ```
+
+脚本会自动加载 `.env`，无需手动设置环境变量。
 
 ## systemd 部署
 
@@ -140,20 +155,12 @@ python3 drcom_auth.py
 安装脚本和服务文件：
 
 ```sh
-sudo mkdir -p /opt/jlu-drcom-auth
-sudo cp drcom_auth.py /opt/jlu-drcom-auth/
 sudo cp jlu-drcom-auth.service /etc/systemd/system/jlu-drcom-auth.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now jlu-drcom-auth.service
 ```
 
-这些命令的作用：
-
-- `sudo mkdir -p /opt/jlu-drcom-auth`：创建程序安装目录。
-- `sudo cp drcom_auth.py /opt/jlu-drcom-auth/`：把认证脚本复制到固定安装目录。
-- `sudo cp jlu-drcom-auth.service /etc/systemd/system/jlu-drcom-auth.service`：把服务配置文件安装到 systemd 的系统服务目录。
-- `sudo systemctl daemon-reload`：让 systemd 重新读取刚安装的服务文件。
-- `sudo systemctl enable --now jlu-drcom-auth.service`：设置开机自启，并立刻启动服务。
+注意：服务文件中 `WorkingDirectory` 设为脚本所在目录，脚本会从该目录加载 `.env` 配置文件。如果你的脚本放在其他位置，请同时修改 service 文件中的 `WorkingDirectory` 和 `ExecStart` 路径。
 
 查看服务状态：
 

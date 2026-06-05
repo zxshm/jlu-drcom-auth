@@ -14,6 +14,24 @@ import urllib.request
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+def load_dotenv(path):
+    try:
+        with open(path, 'r') as f:
+            for raw_line in f:
+                line = raw_line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                key, value = line.split('=', 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                os.environ.setdefault(key, value)
+    except FileNotFoundError:
+        pass
+
+
+load_dotenv(os.path.join(BASE_DIR, '.env'))
+
+
 def env_str(name, default=None, required=False):
     value = os.environ.get(name, default)
     if required and not value:
@@ -197,11 +215,11 @@ def wait_for_drcom_server(max_wait=180):
             sock.sendto(packet, (DRCOM_SERVER, 61440))
             data, addr = sock.recvfrom(1024)
             sock.close()
-            if data and data[0] == 2:
+            if data and (data[0] == 2 or data[0] == 7):
                 log.info(f"DrCOM服务器可达 (第{attempt}次尝试)")
                 return True
-        except Exception:
-            pass
+        except Exception as e:
+            log.warning(f"DrCOM探测异常 (第{attempt}次): {e}")
         finally:
             try:
                 sock.close()

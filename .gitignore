@@ -7,3 +7,7 @@ __pycache__/
 !.env.example
 config.env
 secrets.env
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+models_cache.json
