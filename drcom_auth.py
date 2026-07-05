@@ -10,6 +10,7 @@ import random
 import logging
 import subprocess
 import urllib.request
+import urllib.error
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -79,6 +80,18 @@ MAX_WIFI_RETRIES = env_int('DRCOM_MAX_WIFI_RETRIES', 20)
 KEEP_ALIVE_INTERVAL = env_int('DRCOM_KEEP_ALIVE_INTERVAL', 10)
 SOCKET_TIMEOUT = env_int('DRCOM_SOCKET_TIMEOUT', 10)
 MAX_UDP_RETRIES = env_int('DRCOM_MAX_UDP_RETRIES', 3)
+ONLINE_CHECK_INTERVAL = env_int('DRCOM_ONLINE_CHECK_INTERVAL', 10)
+ONLINE_CHECK_TIMEOUT = env_int('DRCOM_ONLINE_CHECK_TIMEOUT', 5)
+ONLINE_CHECK_FAILS = max(1, env_int('DRCOM_ONLINE_CHECK_FAILS', 1))
+ONLINE_CHECK_URLS = [
+    url.strip()
+    for url in env_str(
+        'DRCOM_ONLINE_CHECK_URLS',
+        'http://connectivitycheck.platform.hicloud.com/generate_204,'
+        'http://connectivitycheck.gstatic.com/generate_204'
+    ).split(',')
+    if url.strip()
+]
 IP_CACHE_FILE = env_str('DRCOM_IP_CACHE_FILE', os.path.join(BASE_DIR, '.drcom_ip_cache'))
 
 LOG_FILE = env_str('DRCOM_LOG_FILE', os.path.join(BASE_DIR, 'drcom_auth.log'))
@@ -95,6 +108,10 @@ logging.basicConfig(
     handlers=handlers
 )
 log = logging.getLogger('jlu-drcom')
+
+
+class ReauthRequired(Exception):
+    pass
 
 
 def md5sum(s):
@@ -226,6 +243,49 @@ def wait_for_drcom_server(max_wait=180):
             except Exception:
                 pass
         time.sleep(3)
+    return False
+
+
+def _is_generate_204_check(url):
+    return 'generate_204' in url
+
+
+def check_real_online():
+    if not ONLINE_CHECK_URLS:
+        return True
+
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    for url in ONLINE_CHECK_URLS:
+        try:
+            request = urllib.request.Request(
+                url,
+                headers={
+                    'User-Agent': 'jlu-drcom-auth/1.0',
+                    'Cache-Control': 'no-cache',
+                },
+                method='GET'
+            )
+            response = opener.open(request, timeout=ONLINE_CHECK_TIMEOUT)
+            status = response.getcode()
+            final_url = response.geturl()
+            response.close()
+
+            if _is_generate_204_check(url):
+                if status == 204 and final_url == url:
+                    return True
+                log.warning(
+                    f'[online-check] {url} 返回 status={status}, final_url={final_url}'
+                )
+                continue
+
+            if 200 <= status < 400:
+                return True
+            log.warning(f'[online-check] {url} 返回 status={status}')
+        except urllib.error.HTTPError as e:
+            log.warning(f'[online-check] {url} HTTP错误: {e.code}')
+        except Exception as e:
+            log.warning(f'[online-check] {url} 探测失败: {e}')
+
     return False
 
 
@@ -401,6 +461,8 @@ class DrcomClient:
         ran = random.randint(0, 0xFFFF)
         ran += random.randint(1, 10)
         svr_num = 0
+        next_online_check = time.time() + ONLINE_CHECK_INTERVAL
+        online_failures = 0
 
         packet = self.keep_alive_package_builder(svr_num, dump(ran), b'\x00' * 4, 1, True)
         while True:
@@ -456,6 +518,22 @@ class DrcomClient:
 
                 i = (i + 2) % 0xFF
                 log.info(f'[keep-alive2] 心跳正常 (seq={i})')
+
+                if ONLINE_CHECK_INTERVAL > 0 and time.time() >= next_online_check:
+                    if check_real_online():
+                        if online_failures:
+                            log.info('[online-check] 真实联网已恢复')
+                        online_failures = 0
+                    else:
+                        online_failures += 1
+                        log.warning(
+                            f'[online-check] 真实联网失败 '
+                            f'({online_failures}/{ONLINE_CHECK_FAILS})'
+                        )
+                        if online_failures >= ONLINE_CHECK_FAILS:
+                            raise ReauthRequired('真实联网探测连续失败，准备重新认证')
+                    next_online_check = time.time() + ONLINE_CHECK_INTERVAL
+
                 time.sleep(KEEP_ALIVE_INTERVAL)
             except Exception as e:
                 log.warning(f"[keep-alive2] 心跳异常: {e}")
@@ -519,6 +597,11 @@ def main():
             if client:
                 client.stop()
             break
+        except ReauthRequired as e:
+            log.error(f"认证异常: {e}")
+            if client:
+                client.stop()
+            log.info("立即重新认证...")
         except Exception as e:
             log.error(f"认证异常: {e}")
             if client:

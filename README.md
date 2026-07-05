@@ -30,7 +30,7 @@
 - 自动检测并连接已有的 NetworkManager WiFi 配置。
 - 执行 DrCOM UDP challenge/login 认证流程。
 - 登录成功后持续发送心跳包维持在线。
-- WiFi 未连接、服务器不可达、心跳异常时自动重试。
+- WiFi 未连接、服务器不可达、心跳异常或真实联网探测失败时自动重试。
 - 支持通过 systemd 后台运行和开机自启。
 - 账号、密码、MAC 等敏感信息不写入源码仓库。
 
@@ -139,6 +139,10 @@ editor .env
 - `DRCOM_KEEP_ALIVE_INTERVAL`：心跳间隔（秒），默认 `10`
 - `DRCOM_SOCKET_TIMEOUT`：Socket 超时（秒），默认 `10`
 - `DRCOM_MAX_UDP_RETRIES`：UDP 单次发送最大重试次数，默认 `3`
+- `DRCOM_ONLINE_CHECK_INTERVAL`：真实联网探测间隔（秒），默认 `10`，设为 `0` 可关闭
+- `DRCOM_ONLINE_CHECK_TIMEOUT`：真实联网探测超时（秒），默认 `5`
+- `DRCOM_ONLINE_CHECK_FAILS`：连续几次真实联网探测失败后重新认证，默认 `1`
+- `DRCOM_ONLINE_CHECK_URLS`：真实联网探测 URL，多个 URL 用英文逗号分隔，默认使用两个 `generate_204` 地址
 
 本地手动运行：
 
@@ -177,6 +181,8 @@ journalctl -u jlu-drcom-auth.service -f
 ```
 
 这个命令会持续跟随服务日志，适合排查 WiFi 连接、认证失败或心跳异常等问题。脚本默认也会在运行目录写入本地日志文件：`drcom_auth.log`。
+
+如果日志持续显示“心跳正常”，但实际已经不能上网，通常说明 UDP 心跳仍有响应，而校园网出口会话已经失效。脚本会定期请求 `DRCOM_ONLINE_CHECK_URLS` 中的地址；连续失败达到 `DRCOM_ONLINE_CHECK_FAILS` 后，会主动结束当前心跳并立即重新执行认证流程。默认 `generate_204` 探测地址必须返回 `204` 且没有跳转才按在线处理；返回 `200` 往往是校园网伪页面或异常响应，会触发重新认证。
 
 ## 注意事项
 
